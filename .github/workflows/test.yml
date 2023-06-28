@@ -1,0 +1,33 @@
+name: Wing Tests
+
+on:
+  push:
+    paths-ignore:
+      - '**/*.md'
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read  # This is required for actions/checkout
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+      - name: Setup Node.js v18
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+      - name: Install winglang globally
+        run: npm install -g winglang
+      - name: Install winglang globally
+        run: npm ci
+      - name: Execute wing test in matrix directory
+        run: wing test --debug main.w
