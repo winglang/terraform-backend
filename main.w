@@ -168,6 +168,12 @@ class TestUser {
 let user = new TestUser("test-user", "test-password");
 let otherUser = new TestUser("other-test-user", "test-password") as "otherUser";
 
+let getProject = inflight(project: str): http.Response => {
+  let response = http.get("${api.url}/project/" + project, {
+    headers: {"Authorization": user.getAuthHeader()}
+  });
+  return response;
+};
 
 // ~~~ TESTS GET /project/:project ~~~
 
@@ -178,9 +184,7 @@ test "GET /project/:project" {
   user.create();
 
   bucket.put(project, Json.stringify(state));
-  let response = http.get("${api.url}/project/" + project, {
-    headers: {"Authorization": user.getAuthHeader()}
-  });
+  let response = getProject(project);
 
   assert(response.status == 200);
   assert(response.body == Json.stringify(state));
@@ -256,11 +260,7 @@ test "POST /project/:project" {
   assert(response.body == "");
   assert(Json.stringify(bucket.getJson(project)) == Json.stringify(newState));
 
-  let newStoredState = http.get("${api.url}/project/" + project, {
-    headers: {
-      "Authorization": user.getAuthHeader()
-    }
-  });
+  let newStoredState = getProject(project);
   assert(newStoredState.body == Json.stringify(newState));
 
   user.delete();
@@ -281,11 +281,7 @@ test "POST /project/:project (unauthorized, missing header)" {
   assert(response.status == 403);
   assert(response.body == "");
 
-  let storedState = http.get("${api.url}/project/" + project, {
-    headers: {
-      "Authorization": user.getAuthHeader()
-    }
-  });
+  let storedState = getProject(project);
   assert(storedState.body == Json.stringify(state));
 
   user.delete();
@@ -307,11 +303,7 @@ test "POST /project/:project (unauthorized, wrong header)" {
   assert(response.status == 403);
   assert(response.body == "");
 
-  let storedState = http.get("${api.url}/project/" + project, {
-    headers: {
-      "Authorization": user.getAuthHeader()
-    }
-  });
+  let storedState = getProject(project);
   assert(storedState.body == Json.stringify(state));
 
   user.delete();
@@ -331,11 +323,7 @@ test "POST /project/:project (project does not exist yet)" {
   assert(response.status == 204);
   assert(response.body == "");
 
-  let storedState = http.get("${api.url}/project/" + project, {
-    headers: {
-      "Authorization": user.getAuthHeader()
-    }
-  });
+  let storedState = getProject(project);
   assert(storedState.body == Json.stringify(newState));
 
   user.delete();
@@ -360,11 +348,7 @@ test "POST /project/:project (project is locked)" {
   assert(response.status == 423);
   assert(response.body == "");
 
-  let storedState = http.get("${api.url}/project/" + project, {
-    headers: {
-      "Authorization": user.getAuthHeader()
-    }
-  });
+  let storedState = getProject(project);
   assert(storedState.body == Json.stringify(state));
 
   user.delete();
