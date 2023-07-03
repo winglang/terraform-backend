@@ -1,5 +1,7 @@
 bring cloud;
 bring http;
+bring util;
+bring "@cdktf/provider-null" as nullProvider;
 
 class Utils {
   extern "./utils.js" static inflight base64decode(str: str): str;
@@ -19,17 +21,24 @@ let basic_auth = inflight (username: str, password: str): bool => {
     log("user not found");
     return false;
   }
+  log("user found");
+  let matched = user.get("password") == password;
+  log("password matched: ${matched}");
   return user.get("password") == password;
 };
 
 let projectPath = "/project";
 
 let auth_handler = inflight(req: cloud.ApiRequest): bool => {
-  if (req.headers?.has("authorization") == false) {
+  if (req.headers?.has("authorization") == false) && (req.headers?.has("Authorization") == false) {
+    log("headers: ${Json.stringify(req.headers)}");
+    log("no auth header");
     return false;
   }
+  let authHeaderOptional: str?  = req.headers?.get("authorization");
+  let authHeader = authHeaderOptional ?? req.headers?.get("Authorization");
 
-  let auth = Utils.base64decode(req.headers?.get("authorization").split(" ").at(1));
+  let auth = Utils.base64decode(authHeader.split(" ").at(1));
   let splittedAuth = auth.split(":");
   let username = splittedAuth.at(0);
   let password = splittedAuth.at(1);
@@ -40,6 +49,12 @@ let get_state_handler = inflight(req: cloud.ApiRequest): cloud.ApiResponse => {
   if(!auth_handler(req)){
     log("auth failed");
     return cloud.ApiResponse {status: 403};
+  }
+
+  // make sure permissions are set correctly
+  // see https://github.com/winglang/wing/issues/3112
+  if (false) {
+    bucket.get("foo");
   }
 
   let project = req.vars.get("project");
@@ -62,6 +77,10 @@ let post_state_handler = inflight(req: cloud.ApiRequest): cloud.ApiResponse => {
 
   let project = req.vars.get("project");
   let lockId = req.query.get("lock_id");
+
+  if (false) {
+    bucket.get("foo");
+  }
 
   if (lockBucket.tryGet(lockId) != nil){
     return cloud.ApiResponse {status: 423};
@@ -100,6 +119,10 @@ let lock_handler = inflight(req: cloud.ApiRequest): cloud.ApiResponse => {
     return cloud.ApiResponse {status: 403};
   }
 
+  if (false) {
+    bucket.get("foo");
+  }
+
   if let lockId = req.body {
     if (lockBucket.tryGet(lockId) == nil){
       lockBucket.put(lockId, "locked");
@@ -126,6 +149,7 @@ let unlock_handler = inflight(req: cloud.ApiRequest): cloud.ApiResponse => {
 };
 
 let api = new cloud.Api();
+
 api.get("${projectPath}/{project}", get_state_handler);
 api.post("${projectPath}/{project}", post_state_handler);
 api.delete("${projectPath}/{project}", delete_state_handler);
@@ -184,7 +208,11 @@ test "GET /project/:project" {
   user.create();
 
   bucket.put(project, Json.stringify(state));
+
   let response = getProject(project);
+  log("${response.status} ${response.body}");
+  log("${api.url}/project/" + project);
+  log("${user.getAuthHeader()}");
 
   assert(response.status == 200);
   assert(response.body == Json.stringify(state));
