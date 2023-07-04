@@ -51,12 +51,6 @@ let get_state_handler = inflight(req: cloud.ApiRequest): cloud.ApiResponse => {
     return cloud.ApiResponse {status: 403};
   }
 
-  // make sure permissions are set correctly
-  // see https://github.com/winglang/wing/issues/3112
-  if (false) {
-    bucket.get("foo");
-  }
-
   let project = req.vars.get("project");
   if let state = bucket.tryGetJson(project) {
     return cloud.ApiResponse {
@@ -77,10 +71,6 @@ let post_state_handler = inflight(req: cloud.ApiRequest): cloud.ApiResponse => {
 
   let project = req.vars.get("project");
   let lockId = req.query.get("lock_id");
-
-  if (false) {
-    bucket.get("foo");
-  }
 
   if (lockBucket.tryGet(lockId) != nil){
     return cloud.ApiResponse {status: 423};
@@ -117,10 +107,6 @@ let delete_state_handler = inflight(req: cloud.ApiRequest): cloud.ApiResponse =>
 let lock_handler = inflight(req: cloud.ApiRequest): cloud.ApiResponse => {
   if(!auth_handler(req)){
     return cloud.ApiResponse {status: 403};
-  }
-
-  if (false) {
-    bucket.get("foo");
   }
 
   if let lockId = req.body {
