@@ -370,7 +370,7 @@ test "POST /project/:project (project is locked)" {
 
   bucket.put(project, Json.stringify(state));
 
-  let response = http.post("${api.url}/project/" + project + "?lock_id=${lockId}", http.RequestOptions {
+  let response = http.post("${api.url}/project/" + project + "?ID=${lockId}", http.RequestOptions {
     body: Json.stringify(newState),
     headers: {"Authorization" => user.getAuthHeader()}
   });
