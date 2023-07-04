@@ -10,7 +10,7 @@ class Utils {
 
 let bucket = new cloud.Bucket() as "state-bucket";
 let lockBucket = new cloud.Bucket() as "lock-bucket";
-let authTable = new cloud.Table(name: "auth", primaryKey: "userId", columns: Map<cloud.ColumnType> {
+let authTable = new cloud.Table(name: "auth", primaryKey: "userId", columns: {
   "userId" => cloud.ColumnType.STRING,
   "password" => cloud.ColumnType.STRING
 });
@@ -61,7 +61,7 @@ let get_state_handler = inflight(req: cloud.ApiRequest): cloud.ApiResponse => {
   if let state = bucket.tryGetJson(project) {
     return cloud.ApiResponse {
       status: 200,
-      headers: Map<str> {"Content-Type" => "application/json"},
+      headers: {"Content-Type" => "application/json"},
       body: Json.stringify(state),
     };
   } else {
@@ -96,7 +96,7 @@ let post_state_handler = inflight(req: cloud.ApiRequest): cloud.ApiResponse => {
 
     return cloud.ApiResponse {
       status: 204,
-      headers: Map<str> {"Content-Type" => "application/json"}
+      headers: {"Content-Type" => "application/json"}
     };
   } else {
     return cloud.ApiResponse {status: 400};
@@ -281,7 +281,7 @@ test "POST /project/:project" {
   bucket.putJson(project, state);
   let response = http.post("${api.url}/project/" + project, http.RequestOptions {
     body: Json.stringify(newState),
-    headers: Map<str> { "Authorization" => user.getAuthHeader() }
+    headers: { "Authorization" => user.getAuthHeader() }
   });
 
   assert(response.status == 204);
@@ -325,7 +325,7 @@ test "POST /project/:project (unauthorized, wrong header)" {
   bucket.put(project, Json.stringify(state));
   let response = http.post("${api.url}/project/" + project, http.RequestOptions {
     body: Json.stringify(newState),
-    headers: Map<str> {"Authorization" => "Basic " + user.base64encode("wrong-user:wrong-password")}
+    headers: {"Authorization" => "Basic " + user.base64encode("wrong-user:wrong-password")}
   });
 
   assert(response.status == 403);
@@ -345,7 +345,7 @@ test "POST /project/:project (project does not exist yet)" {
 
   let response = http.post("${api.url}/project/" + project, http.RequestOptions {
     body: Json.stringify(newState),
-    headers: Map<str> {"Authorization" => user.getAuthHeader()}
+    headers: {"Authorization" => user.getAuthHeader()}
   });
 
   assert(response.status == 204);
@@ -370,7 +370,7 @@ test "POST /project/:project (project is locked)" {
 
   let response = http.post("${api.url}/project/" + project + "?lock_id=${lockId}", http.RequestOptions {
     body: Json.stringify(newState),
-    headers: Map<str> {"Authorization" => user.getAuthHeader()}
+    headers: {"Authorization" => user.getAuthHeader()}
   });
 
   assert(response.status == 423);
