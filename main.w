@@ -1,35 +1,44 @@
 bring cloud;
 bring http;
+bring util;
+bring "@cdktf/provider-null" as nullProvider;
 
 class Utils {
-  extern "./utils.js" static inflight base64decode(str: str): str;
+  extern "./utils.js" static inflight base64decode(value: str): str;
   init() { }
 }
 
 let bucket = new cloud.Bucket() as "state-bucket";
 let lockBucket = new cloud.Bucket() as "lock-bucket";
 let authTable = new cloud.Table(name: "auth", primaryKey: "userId", columns: {
-  userId: cloud.ColumnType.STRING,
-  password: cloud.ColumnType.STRING
+  "userId" => cloud.ColumnType.STRING,
+  "password" => cloud.ColumnType.STRING
 });
 
 let basic_auth = inflight (username: str, password: str): bool => {
-  let user = authTable.get(username);
+  let user: Json? = authTable.get(username);
   if (user == nil) {
     log("user not found");
     return false;
   }
-  return user.get("password") == password;
+  log("user found");
+  let matched = user?.get("password") == password;
+  log("password matched: ${matched}");
+  return user?.get("password") == password;
 };
 
 let projectPath = "/project";
 
 let auth_handler = inflight(req: cloud.ApiRequest): bool => {
-  if (req.headers?.has("authorization") == false) {
+  if (req.headers?.has("authorization") == false) && (req.headers?.has("Authorization") == false) {
+    log("headers: ${Json.stringify(req.headers)}");
+    log("no auth header");
     return false;
   }
+  let authHeaderOptional: str?  = req.headers?.get("authorization");
+  let authHeader = authHeaderOptional ?? req.headers?.get("Authorization");
 
-  let auth = Utils.base64decode(req.headers?.get("authorization").split(" ").at(1));
+  let auth = Utils.base64decode(authHeader.split(" ").at(1));
   let splittedAuth = auth.split(":");
   let username = splittedAuth.at(0);
   let password = splittedAuth.at(1);
@@ -46,7 +55,7 @@ let get_state_handler = inflight(req: cloud.ApiRequest): cloud.ApiResponse => {
   if let state = bucket.tryGetJson(project) {
     return cloud.ApiResponse {
       status: 200,
-      headers: {"Content-Type": "application/json"},
+      headers: {"Content-Type" => "application/json"},
       body: Json.stringify(state),
     };
   } else {
@@ -77,7 +86,7 @@ let post_state_handler = inflight(req: cloud.ApiRequest): cloud.ApiResponse => {
 
     return cloud.ApiResponse {
       status: 204,
-      headers: {"Content-Type": "application/json"}
+      headers: {"Content-Type" => "application/json"}
     };
   } else {
     return cloud.ApiResponse {status: 400};
@@ -126,6 +135,7 @@ let unlock_handler = inflight(req: cloud.ApiRequest): cloud.ApiResponse => {
 };
 
 let api = new cloud.Api();
+
 api.get("${projectPath}/{project}", get_state_handler);
 api.post("${projectPath}/{project}", post_state_handler);
 api.delete("${projectPath}/{project}", delete_state_handler);
@@ -142,7 +152,7 @@ class TestUser {
   username: str;
   password: str;
 
-  extern "./test-utils.js" inflight base64encode(str: str): str;
+  extern "./test-utils.js" inflight base64encode(value: str): str;
 
   init(username: str, password: str) {
     this.username = username;
@@ -184,7 +194,11 @@ test "GET /project/:project" {
   user.create();
 
   bucket.put(project, Json.stringify(state));
+
   let response = getProject(project);
+  log("${response.status} ${response.body}");
+  log("${api.url}/project/" + project);
+  log("${user.getAuthHeader()}");
 
   assert(response.status == 200);
   assert(response.body == Json.stringify(state));
@@ -253,7 +267,7 @@ test "POST /project/:project" {
   bucket.putJson(project, state);
   let response = http.post("${api.url}/project/" + project, http.RequestOptions {
     body: Json.stringify(newState),
-    headers: {"Authorization": user.getAuthHeader()}
+    headers: { "Authorization" => user.getAuthHeader() }
   });
 
   assert(response.status == 204);
@@ -297,7 +311,7 @@ test "POST /project/:project (unauthorized, wrong header)" {
   bucket.put(project, Json.stringify(state));
   let response = http.post("${api.url}/project/" + project, http.RequestOptions {
     body: Json.stringify(newState),
-    headers: {"Authorization": "Basic " + user.base64encode("wrong-user:wrong-password")}
+    headers: {"Authorization" => "Basic " + user.base64encode("wrong-user:wrong-password")}
   });
 
   assert(response.status == 403);
@@ -317,7 +331,7 @@ test "POST /project/:project (project does not exist yet)" {
 
   let response = http.post("${api.url}/project/" + project, http.RequestOptions {
     body: Json.stringify(newState),
-    headers: {"Authorization": user.getAuthHeader()}
+    headers: {"Authorization" => user.getAuthHeader()}
   });
 
   assert(response.status == 204);
@@ -342,7 +356,7 @@ test "POST /project/:project (project is locked)" {
 
   let response = http.post("${api.url}/project/" + project + "?lock_id=${lockId}", http.RequestOptions {
     body: Json.stringify(newState),
-    headers: {"Authorization": user.getAuthHeader()}
+    headers: {"Authorization" => user.getAuthHeader()}
   });
 
   assert(response.status == 423);
