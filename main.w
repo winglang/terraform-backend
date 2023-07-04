@@ -2,6 +2,7 @@ bring cloud;
 bring http;
 bring util;
 bring "@cdktf/provider-null" as nullProvider;
+bring "cdktf" as cdktf;
 
 class Utils {
   extern "./utils.js" static inflight base64decode(value: str): str;
@@ -70,18 +71,18 @@ let post_state_handler = inflight(req: cloud.ApiRequest): cloud.ApiResponse => {
   }
 
   let project = req.vars.get("project");
-  let lockId = req.query.get("lock_id");
+  let lockId = req.query.get("ID");
+
+  log("lockId: ${lockId}");
+  log("project: ${project}");
 
   if (lockBucket.tryGet(lockId) != nil){
     return cloud.ApiResponse {status: 423};
   }
 
-  let foo = Json {
-    "foo": "bar"
-  };
-
   if let body = req.body {
     let state = Json.parse(body);
+    log("state: ${Json.stringify(state)}");
     bucket.put(project, Json.stringify(state));
 
     return cloud.ApiResponse {
@@ -133,6 +134,21 @@ let unlock_handler = inflight(req: cloud.ApiRequest): cloud.ApiResponse => {
     return cloud.ApiResponse {status: 400};
   }
 };
+
+let createUser = new cloud.Function(inflight(eventStr: str): void => {
+  // workaround since eventStr is already Json
+  let event = Json.parse("${Json.stringify(eventStr)}");
+  let username = event.get("username").asStr();
+  // seems to return always nil
+  let user = authTable.get(username).tryAsStr();
+  if (user == nil) {
+    authTable.insert(username, {
+      password: event.get("password").asStr()
+    });
+  } else {
+    log("user already exists");
+  }
+}) as "create-user";
 
 let api = new cloud.Api();
 
