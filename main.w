@@ -2,7 +2,6 @@ bring cloud;
 bring ex;
 bring http;
 bring util;
-bring "@cdktf/provider-null" as nullProvider;
 bring "cdktf" as cdktf;
 
 class Utils {
@@ -17,63 +16,80 @@ let authTable = new ex.Table(name: "auth", primaryKey: "userId", columns: {
   "password" => ex.ColumnType.STRING
 });
 
-let basic_auth = inflight (username: str, password: str): bool => {
-  let user: Json? = authTable.get(username);
-  if (user == nil) {
-    log("user not found");
-    return false;
+class BasicAuth {
+  authTable: ex.Table;
+
+  init(table: ex.Table) {
+    this.authTable = table;
   }
-  log("user found");
-  let matched = user?.get("password")?.asStr() == password;
-  log("password matched: ${matched}");
-  return user?.get("password")?.asStr() == password;
-};
+
+  inflight authHandler(req: cloud.ApiRequest): bool {
+    if (req.headers?.has("authorization") == false) && (req.headers?.has("Authorization") == false) {
+      log("headers: ${Json.stringify(req.headers)}");
+      log("no auth header");
+      return false;
+    }
+    let authHeaderOptional = req.headers?.get("authorization");
+    let var authHeader = req.headers?.get("Authorization");
+
+    if (authHeader == nil) {
+      authHeader = authHeaderOptional;
+    }
+
+    if (authHeader == nil) {
+      log("no auth header");
+      return false;
+    }
+
+    let auth = Utils.base64decode("${authHeader}".split(" ").at(1));
+    let splittedAuth = auth.split(":");
+    let username = splittedAuth.at(0);
+    let password = splittedAuth.at(1);
+    return this.basicAuth(username, password);
+  }
+
+  inflight basicAuth(username: str, password: str): bool {
+    let user: Json? = authTable.get(username);
+    if (user == nil) {
+      log("user not found");
+      return false;
+    }
+    log("user found");
+    let matched = user?.get("password")?.asStr() == password;
+    log("password matched: ${matched}");
+    return user?.get("password")?.asStr() == password;
+  }
+}
+
+class BasicAuth {
+  authTable: ex.Table;
+
+  init(table: ex.Table) {
+    this.authTable = table;
+  }
+
+  inflight getState(req: cloud.ApiRequest): cloud.ApiResponse => {
+    if(!auth_handler(req)){
+      log("auth failed");
+      return cloud.ApiResponse {status: 403};
+    }
+
+    let project = req.vars.get("project");
+    if let state = bucket.tryGetJson(project) {
+      return cloud.ApiResponse {
+        status: 200,
+        headers: {"Content-Type" => "application/json"},
+        body: Json.stringify(state),
+      };
+    } else {
+      log("project not found");
+      return cloud.ApiResponse {status: 404};
+    }
+  }
+}
 
 let projectPath = "/project";
 
-let auth_handler = inflight(req: cloud.ApiRequest): bool => {
-  if (req.headers?.has("authorization") == false) && (req.headers?.has("Authorization") == false) {
-    log("headers: ${Json.stringify(req.headers)}");
-    log("no auth header");
-    return false;
-  }
-  let authHeaderOptional = req.headers?.get("authorization");
-  let var authHeader = req.headers?.get("Authorization");
-
-  if (authHeader == nil) {
-    authHeader = authHeaderOptional;
-  }
-
-  if (authHeader == nil) {
-    log("no auth header");
-    return false;
-  }
-
-  let auth = Utils.base64decode("${authHeader}".split(" ").at(1));
-  let splittedAuth = auth.split(":");
-  let username = splittedAuth.at(0);
-  let password = splittedAuth.at(1);
-  return basic_auth(username, password);
-};
-
-let get_state_handler = inflight(req: cloud.ApiRequest): cloud.ApiResponse => {
-  if(!auth_handler(req)){
-    log("auth failed");
-    return cloud.ApiResponse {status: 403};
-  }
-
-  let project = req.vars.get("project");
-  if let state = bucket.tryGetJson(project) {
-    return cloud.ApiResponse {
-      status: 200,
-      headers: {"Content-Type" => "application/json"},
-      body: Json.stringify(state),
-    };
-  } else {
-    log("project not found");
-    return cloud.ApiResponse {status: 404};
-  }
-};
 
 let post_state_handler = inflight(req: cloud.ApiRequest): cloud.ApiResponse => {
   if(!auth_handler(req)){
@@ -167,6 +183,10 @@ api.post("${projectPath}/{project}", post_state_handler);
 api.delete("${projectPath}/{project}", delete_state_handler);
 api.post("${projectPath}/{project}/lock", lock_handler);
 api.post("${projectPath}/{project}/unlock", unlock_handler);
+
+new cdktf.TerraformOutput(
+  value: api.url,
+) as "terraform-backend-url";
 
 // ~~~ TESTS ~~~
 
