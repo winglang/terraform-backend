@@ -1,4 +1,5 @@
 bring cloud;
+bring ex;
 bring http;
 bring util;
 bring "@cdktf/provider-null" as nullProvider;
@@ -11,9 +12,9 @@ class Utils {
 
 let bucket = new cloud.Bucket() as "state-bucket";
 let lockBucket = new cloud.Bucket() as "lock-bucket";
-let authTable = new cloud.Table(name: "auth", primaryKey: "userId", columns: {
-  "userId" => cloud.ColumnType.STRING,
-  "password" => cloud.ColumnType.STRING
+let authTable = new ex.Table(name: "auth", primaryKey: "userId", columns: {
+  "userId" => ex.ColumnType.STRING,
+  "password" => ex.ColumnType.STRING
 });
 
 let basic_auth = inflight (username: str, password: str): bool => {
@@ -23,9 +24,9 @@ let basic_auth = inflight (username: str, password: str): bool => {
     return false;
   }
   log("user found");
-  let matched = user?.get("password") == password;
+  let matched = user?.get("password")?.asStr() == password;
   log("password matched: ${matched}");
-  return user?.get("password") == password;
+  return user?.get("password")?.asStr() == password;
 };
 
 let projectPath = "/project";
@@ -36,10 +37,19 @@ let auth_handler = inflight(req: cloud.ApiRequest): bool => {
     log("no auth header");
     return false;
   }
-  let authHeaderOptional: str?  = req.headers?.get("authorization");
-  let authHeader = authHeaderOptional ?? req.headers?.get("Authorization");
+  let authHeaderOptional = req.headers?.get("authorization");
+  let var authHeader = req.headers?.get("Authorization");
 
-  let auth = Utils.base64decode(authHeader.split(" ").at(1));
+  if (authHeader == nil) {
+    authHeader = authHeaderOptional;
+  }
+
+  if (authHeader == nil) {
+    log("no auth header");
+    return false;
+  }
+
+  let auth = Utils.base64decode("${authHeader}".split(" ").at(1));
   let splittedAuth = auth.split(":");
   let username = splittedAuth.at(0);
   let password = splittedAuth.at(1);
